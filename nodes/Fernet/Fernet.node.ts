@@ -101,7 +101,7 @@ export class Fernet implements INodeType {
 						inputSource: ['field'],
 					},
 				},
-				description: 'Name of the incoming JSON field to encrypt or decrypt',
+				description: 'Field path in the incoming item JSON. Supports dot notation, for example body.secrets_envelope.encrypted_data.',
 			},
 			{
 				displayName: 'Text',
@@ -114,7 +114,7 @@ export class Fernet implements INodeType {
 						inputSource: ['text'],
 					},
 				},
-				description: 'Text or Fernet token to encrypt or decrypt',
+				description: 'Text or Fernet token to encrypt or decrypt. Use expressions here, for example ={{ $JSON.body.secrets_envelope.encrypted_data }}.',
 			},
 			{
 				displayName: 'JSON',

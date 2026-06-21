@@ -18,3 +18,24 @@ test('serializes direct JSON as the input value', () => {
 test('throws a useful error when selected field is missing', () => {
 	assert.throws(() => getInputText('field', {}, 'missing'), /Input field "missing" is empty/);
 });
+
+test('reads nested field paths from incoming item JSON', () => {
+	assert.equal(
+		getInputText(
+			'field',
+			{
+				body: {
+					secrets_envelope: {
+						encrypted_data: 'gAAAA-token',
+					},
+				},
+			},
+			'body.secrets_envelope.encrypted_data',
+		),
+		'gAAAA-token',
+	);
+});
+
+test('uses resolved expression value when it is passed as a field name', () => {
+	assert.equal(getInputText('field', {}, 'gAAAA-token'), 'gAAAA-token');
+});
