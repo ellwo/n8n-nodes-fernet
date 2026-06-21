@@ -8,6 +8,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { decryptFernet, encryptFernet } from './Fernet.crypto';
 import { getInputText, type FernetInputSource } from './Fernet.input';
+import { getResultJson } from './Fernet.output';
 
 async function getFernetKey(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<string> {
 	const keySource = executeFunctions.getNodeParameter('keySource', itemIndex) as
@@ -130,14 +131,6 @@ export class Fernet implements INodeType {
 				description: 'JSON object to encrypt',
 			},
 			{
-				displayName: 'Output Field',
-				name: 'outputField',
-				type: 'string',
-				default: 'result',
-				required: true,
-				description: 'Name of the JSON field where the encrypted or decrypted value will be written',
-			},
-			{
 				displayName: 'Key Source',
 				name: 'keySource',
 				type: 'options',
@@ -186,7 +179,6 @@ export class Fernet implements INodeType {
 					inputSource === 'field'
 						? this.getNodeParameter('inputField', itemIndex)
 						: this.getNodeParameter(inputSource === 'json' ? 'inputJson' : 'inputText', itemIndex);
-				const outputField = this.getNodeParameter('outputField', itemIndex) as string;
 				const key = await getFernetKey(this, itemIndex);
 				const item = items[itemIndex];
 				const inputText = getInputText(inputSource, item.json, inputParameter);
@@ -196,21 +188,15 @@ export class Fernet implements INodeType {
 						: decryptFernet(inputText, key);
 
 				returnData.push({
-					json: {
-						...item.json,
-						[outputField]: result,
-					},
-					binary: item.binary,
+					json: getResultJson(operation, result),
 					pairedItem: { item: itemIndex },
 				});
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({
 						json: {
-							...items[itemIndex].json,
 							error: error instanceof Error ? error.message : String(error),
 						},
-						binary: items[itemIndex].binary,
 						pairedItem: { item: itemIndex },
 					});
 					continue;
