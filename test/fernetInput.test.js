@@ -39,3 +39,8 @@ test('reads nested field paths from incoming item JSON', () => {
 test('uses resolved expression value when it is passed as a field name', () => {
 	assert.equal(getInputText('field', {}, 'gAAAA-token'), 'gAAAA-token');
 });
+
+test('uses long resolved expression value as the input', () => {
+	const longToken = 'gAAAAABqOAwW-some-long-resolved-expression-value-that-is-not-a-field-name';
+	assert.equal(getInputText('field', {}, longToken), longToken);
+});

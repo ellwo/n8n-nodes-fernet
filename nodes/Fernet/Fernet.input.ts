@@ -29,6 +29,16 @@ function looksLikeFernetToken(value: string): boolean {
 	return value.startsWith('gAAAA');
 }
 
+function looksLikeInlineValue(value: string): boolean {
+	if (value.length === 0) {
+		return false;
+	}
+
+	// Long values, base64-like payloads, or fernet tokens are almost certainly
+	// resolved expressions rather than real JSON field names.
+	return value.length > 40 || looksLikeFernetToken(value);
+}
+
 function formatFieldLabel(value: string): string {
 	if (value.length <= 80) {
 		return value;
@@ -47,17 +57,25 @@ export function getInputText(
 	}
 
 	const inputField = inputValue as string;
-	let fieldValue = itemJson[inputField];
 
-	if ((fieldValue === undefined || fieldValue === null || fieldValue === '') && inputField.includes('.')) {
-		fieldValue = getValueByPath(itemJson, inputField) as IDataObject[string];
+	if (typeof inputField !== 'string') {
+		return stringifyInputValue(inputField);
 	}
 
-	// Expression was entered in "Input Field" and n8n resolved it to the actual token/value.
+	let fieldValue: unknown = itemJson[inputField];
+
 	if (
 		(fieldValue === undefined || fieldValue === null || fieldValue === '') &&
-		typeof inputField === 'string' &&
-		looksLikeFernetToken(inputField)
+		inputField.includes('.')
+	) {
+		fieldValue = getValueByPath(itemJson, inputField);
+	}
+
+	// n8n resolved an expression into this parameter and put the actual payload
+	// here instead of a field name. Treat the resolved value as the input.
+	if (
+		(fieldValue === undefined || fieldValue === null || fieldValue === '') &&
+		looksLikeInlineValue(inputField)
 	) {
 		fieldValue = inputField;
 	}
