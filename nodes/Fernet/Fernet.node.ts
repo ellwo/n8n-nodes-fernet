@@ -1,0 +1,172 @@
+import type {
+	IExecuteFunctions,
+	INodeExecutionData,
+	INodeType,
+	INodeTypeDescription,
+} from 'n8n-workflow';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
+
+import { decryptFernet, encryptFernet } from './Fernet.crypto';
+
+async function getFernetKey(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<string> {
+	const keySource = executeFunctions.getNodeParameter('keySource', itemIndex) as
+		| 'credential'
+		| 'nodeField';
+
+	if (keySource === 'nodeField') {
+		return executeFunctions.getNodeParameter('fernetKey', itemIndex) as string;
+	}
+
+	const credentials = await executeFunctions.getCredentials('fernetKeyApi', itemIndex);
+
+	return credentials.key as string;
+}
+
+export class Fernet implements INodeType {
+	description: INodeTypeDescription = {
+		displayName: 'Fernet',
+		name: 'fernet',
+		icon: 'file:fernet.svg',
+		group: ['transform'],
+		version: [1],
+		subtitle: '={{$parameter["operation"]}}',
+		description: 'Encrypt and decrypt data with Fernet symmetric encryption',
+		defaults: {
+			name: 'Fernet',
+		},
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
+		usableAsTool: true,
+		credentials: [
+			{
+				name: 'fernetKeyApi',
+				required: false,
+			},
+		],
+		properties: [
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Decrypt',
+						value: 'decrypt',
+						action: 'Decrypt data with fernet',
+					},
+					{
+						name: 'Encrypt',
+						value: 'encrypt',
+						action: 'Encrypt data with fernet',
+					},
+				],
+				default: 'encrypt',
+			},
+			{
+				displayName: 'Input Field',
+				name: 'inputField',
+				type: 'string',
+				default: 'data',
+				required: true,
+				description: 'Name of the incoming JSON field to encrypt or decrypt',
+			},
+			{
+				displayName: 'Output Field',
+				name: 'outputField',
+				type: 'string',
+				default: 'result',
+				required: true,
+				description: 'Name of the JSON field where the encrypted or decrypted value will be written',
+			},
+			{
+				displayName: 'Key Source',
+				name: 'keySource',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Credential',
+						value: 'credential',
+					},
+					{
+						name: 'Node Field',
+						value: 'nodeField',
+					},
+				],
+				default: 'credential',
+				description: 'Where to read the Fernet key from',
+			},
+			{
+				displayName: 'Fernet Key',
+				name: 'fernetKey',
+				type: 'string',
+				typeOptions: {
+					password: true,
+				},
+				default: '',
+				required: true,
+				displayOptions: {
+					show: {
+						keySource: ['nodeField'],
+					},
+				},
+				description: 'A URL-safe base64-encoded 32-byte Fernet key',
+			},
+		],
+	};
+
+	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+		const items = this.getInputData();
+		const returnData: INodeExecutionData[] = [];
+
+		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+			try {
+				const operation = this.getNodeParameter('operation', itemIndex) as 'decrypt' | 'encrypt';
+				const inputField = this.getNodeParameter('inputField', itemIndex) as string;
+				const outputField = this.getNodeParameter('outputField', itemIndex) as string;
+				const key = await getFernetKey(this, itemIndex);
+				const item = items[itemIndex];
+				const inputValue = item.json[inputField];
+
+				if (inputValue === undefined || inputValue === null) {
+					throw new NodeOperationError(this.getNode(), `Input field "${inputField}" is empty`, {
+						itemIndex,
+					});
+				}
+
+				const inputText =
+					typeof inputValue === 'string' ? inputValue : JSON.stringify(inputValue);
+				const result =
+					operation === 'encrypt'
+						? encryptFernet(inputText, key)
+						: decryptFernet(inputText, key);
+
+				returnData.push({
+					json: {
+						...item.json,
+						[outputField]: result,
+					},
+					binary: item.binary,
+					pairedItem: { item: itemIndex },
+				});
+			} catch (error) {
+				if (this.continueOnFail()) {
+					returnData.push({
+						json: {
+							...items[itemIndex].json,
+							error: error instanceof Error ? error.message : String(error),
+						},
+						binary: items[itemIndex].binary,
+						pairedItem: { item: itemIndex },
+					});
+					continue;
+				}
+
+				throw new NodeOperationError(this.getNode(), error as Error, { itemIndex });
+			}
+		}
+
+		return [returnData];
+	}
+}

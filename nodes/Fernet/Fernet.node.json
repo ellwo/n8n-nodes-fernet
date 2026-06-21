@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-fernet.fernet",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Development", "Developer Tools", "Data & Storage"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://cryptography.io/en/latest/fernet/"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://cryptography.io/en/latest/fernet/"
+			}
+		]
+	}
+}
