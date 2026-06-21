@@ -7,6 +7,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { decryptFernet, encryptFernet } from './Fernet.crypto';
+import { getInputText, type FernetInputSource } from './Fernet.input';
 
 async function getFernetKey(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<string> {
 	const keySource = executeFunctions.getNodeParameter('keySource', itemIndex) as
@@ -64,12 +65,69 @@ export class Fernet implements INodeType {
 				default: 'encrypt',
 			},
 			{
+				displayName: 'Input Source',
+				name: 'inputSource',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'JSON Field',
+						value: 'field',
+						description: 'Read the value from a field in the incoming item JSON',
+					},
+					{
+						name: 'JSON Value',
+						value: 'json',
+						description: 'Encrypt a JSON object entered in this node',
+					},
+					{
+						name: 'Text Value',
+						value: 'text',
+						description: 'Use the value entered in this node',
+					},
+				],
+				default: 'text',
+				description: 'Where to read the value to encrypt or decrypt from',
+			},
+			{
 				displayName: 'Input Field',
 				name: 'inputField',
 				type: 'string',
 				default: 'data',
 				required: true,
+				displayOptions: {
+					show: {
+						inputSource: ['field'],
+					},
+				},
 				description: 'Name of the incoming JSON field to encrypt or decrypt',
+			},
+			{
+				displayName: 'Text',
+				name: 'inputText',
+				type: 'string',
+				default: '',
+				required: true,
+				displayOptions: {
+					show: {
+						inputSource: ['text'],
+					},
+				},
+				description: 'Text or Fernet token to encrypt or decrypt',
+			},
+			{
+				displayName: 'JSON',
+				name: 'inputJson',
+				type: 'json',
+				default: '{}',
+				required: true,
+				displayOptions: {
+					show: {
+						inputSource: ['json'],
+						operation: ['encrypt'],
+					},
+				},
+				description: 'JSON object to encrypt',
 			},
 			{
 				displayName: 'Output Field',
@@ -123,20 +181,15 @@ export class Fernet implements INodeType {
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
 				const operation = this.getNodeParameter('operation', itemIndex) as 'decrypt' | 'encrypt';
-				const inputField = this.getNodeParameter('inputField', itemIndex) as string;
+				const inputSource = this.getNodeParameter('inputSource', itemIndex) as FernetInputSource;
+				const inputParameter =
+					inputSource === 'field'
+						? this.getNodeParameter('inputField', itemIndex)
+						: this.getNodeParameter(inputSource === 'json' ? 'inputJson' : 'inputText', itemIndex);
 				const outputField = this.getNodeParameter('outputField', itemIndex) as string;
 				const key = await getFernetKey(this, itemIndex);
 				const item = items[itemIndex];
-				const inputValue = item.json[inputField];
-
-				if (inputValue === undefined || inputValue === null) {
-					throw new NodeOperationError(this.getNode(), `Input field "${inputField}" is empty`, {
-						itemIndex,
-					});
-				}
-
-				const inputText =
-					typeof inputValue === 'string' ? inputValue : JSON.stringify(inputValue);
+				const inputText = getInputText(inputSource, item.json, inputParameter);
 				const result =
 					operation === 'encrypt'
 						? encryptFernet(inputText, key)
